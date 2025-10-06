@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+import '../../../ViewsModels/pointage_viewmodel.dart';
 import '../../../navigation/CustomBottomNavigationBar.dart';
 import 'QRScannerScreen.dart';
 
@@ -11,7 +13,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  // State variables
   int _currentIndex = 0;
   final String _employeeName = "Hassan Fayech";
   bool _hasActiveAlert = true;
@@ -22,6 +23,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _initializeAnimation();
+    // ✅ CORRECTION: Utiliser WidgetsBinding pour charger après la construction
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTodayPointage();
+    });
   }
 
   void _initializeAnimation() {
@@ -34,6 +39,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Future<void> _loadTodayPointage() async {
+    if (!mounted) return;
+    print('🔄 [HOME] Chargement du pointage du jour...');
+    final pointageVM = Provider.of<PointageViewModel>(context, listen: false);
+    await pointageVM.fetchTodayPointage();
+    print('✅ [HOME] Pointage chargé');
+  }
+
   @override
   void dispose() {
     _pulseController.dispose();
@@ -41,23 +54,40 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _scanQRCode() async {
+    print('📷 [HOME] Demande de permission caméra...');
     final PermissionStatus permission = await Permission.camera.request();
 
     switch (permission) {
       case PermissionStatus.granted:
+        print('✅ [HOME] Permission accordée');
         if (mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+          final result = await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ChangeNotifierProvider.value(
+                value: Provider.of<PointageViewModel>(context, listen: false),
+                child: const QRScannerScreen(),
+              ),
+            ),
           );
+
+          print('🔙 [HOME] Retour du scanner - Résultat: $result');
+
+          if (result == true && mounted) {
+            print('🔄 [HOME] Rafraîchissement après succès...');
+            await _loadTodayPointage();
+          }
         }
         break;
       case PermissionStatus.denied:
+        print('⚠️ [HOME] Permission refusée');
         _showPermissionDialog();
         break;
       case PermissionStatus.permanentlyDenied:
+        print('❌ [HOME] Permission refusée définitivement');
         _showSettingsDialog();
         break;
       default:
+        print('❓ [HOME] Statut de permission inconnu: $permission');
         break;
     }
   }
@@ -195,24 +225,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildBody() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildHeaderGradient(),
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildEmployeeStatusCard(),
-                const SizedBox(height: 32),
-                _buildPriorityTasksSection(),
-                const SizedBox(height: 32),
-                if (_hasActiveAlert) _buildAlertSection(),
-              ],
+    return RefreshIndicator(
+      onRefresh: _loadTodayPointage,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          children: [
+            _buildHeaderGradient(),
+            Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildEmployeeStatusCard(),
+                  const SizedBox(height: 32),
+                  _buildPriorityTasksSection(),
+                  const SizedBox(height: 32),
+                  Consumer<PointageViewModel>(
+                    builder: (context, pointageVM, _) {
+                      final shouldShowAlert = pointageVM.employeeStatus == EmployeeStatus.absent ||
+                          pointageVM.employeeStatus == EmployeeStatus.notPointed;
+
+                      if (shouldShowAlert && _hasActiveAlert) {
+                        return _buildAlertSection();
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -231,51 +275,71 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildEmployeeStatusCard() {
-    return Container(
-      decoration: _cardDecoration(),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildCardHeader(Icons.badge_outlined, "Statut de l'employé"),
-            const SizedBox(height: 20),
-            _buildStatusIndicator(),
-            const SizedBox(height: 16),
-            _buildInfoRow(Icons.access_time, "Dernier pointage", "22/07/2025 - 08:30"),
-            const SizedBox(height: 8),
-            _buildInfoRow(Icons.assignment, "Tâches du jour", "3 à effectuer"),
-          ],
-        ),
-      ),
-    );
-  }
+    return Consumer<PointageViewModel>(
+      builder: (context, pointageVM, _) {
+        final statusText = pointageVM.getStatusText();
+        final statusColor = pointageVM.getStatusColor();
+        final statusIcon = pointageVM.getStatusIcon();
+        final lastPointageText = pointageVM.getLastPointageText();
 
-  Widget _buildStatusIndicator() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF7ED957).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF7ED957).withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          const CircleAvatar(
-            radius: 6,
-            backgroundColor: Color(0xFF7ED957),
-          ),
-          const SizedBox(width: 12),
-          const Text(
-            "Présent sur site",
-            style: TextStyle(
-              fontSize: 16,
-              color: Color(0xFF005B96),
-              fontWeight: FontWeight.w600,
+        return Container(
+          decoration: _cardDecoration(),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCardHeader(Icons.badge_outlined, "Statut de l'employé"),
+                const SizedBox(height: 20),
+                if (pointageVM.isLoading)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: statusColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 6,
+                          backgroundColor: statusColor,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          statusText,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: statusColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        Icon(statusIcon, color: statusColor, size: 20),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildInfoRow(
+                    Icons.access_time,
+                    "Dernier pointage",
+                    lastPointageText ?? "Aucun pointage aujourd'hui",
+                  ),
+                  const SizedBox(height: 8),
+                  _buildInfoRow(Icons.assignment, "Tâches du jour", "3 à effectuer"),
+                ],
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -452,12 +516,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             fontWeight: FontWeight.w500,
           ),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Color(0xFF005B96),
-            fontWeight: FontWeight.w600,
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF005B96),
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

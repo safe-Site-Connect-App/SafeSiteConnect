@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../Models/user_model.dart';
+import '../../../models/user_model.dart';
 import '../../../ViewsModels/user_viewmodel.dart';
 
 import 'CustomBottomNavigationBarAdmin.dart';
@@ -325,7 +325,7 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                         ),
                       ),
                       Text(
-                        '${employee.role} • ${employee.poste}',
+                        '${employee.role} • ${employee.poste ?? 'N/A'}', // Handle null poste
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -475,7 +475,12 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
     }
   }
 
-  // DIALOG POUR AJOUTER UN UTILISATEUR AVEC MVVM
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
+  }
+
   void _showAddEmployeeDialog() {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
@@ -594,10 +599,13 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                           decoration: _buildInputDecoration('Rôle', Icons.person_pin),
                           items: ['Admin', 'Employee']
                               .map((role) => DropdownMenuItem(
-                              value: role,
-                              child: Text(role, style: const TextStyle(fontSize: 12))))
+                            value: role,
+                            child: Text(role, style: const TextStyle(fontSize: 12)),
+                          ))
                               .toList(),
-                          onChanged: viewModel.isLoading ? null : (value) {
+                          onChanged: viewModel.isLoading
+                              ? null
+                              : (value) {
                             setDialogState(() => selectedRole = value);
                           },
                         ),
@@ -607,10 +615,13 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                           decoration: _buildInputDecoration('Poste', Icons.work_outline),
                           items: ['Technicien', 'Manager', 'Opérateur', 'Superviseur', 'Administrateur']
                               .map((post) => DropdownMenuItem(
-                              value: post,
-                              child: Text(post, style: const TextStyle(fontSize: 12))))
+                            value: post,
+                            child: Text(post, style: const TextStyle(fontSize: 12)),
+                          ))
                               .toList(),
-                          onChanged: viewModel.isLoading ? null : (value) {
+                          onChanged: viewModel.isLoading
+                              ? null
+                              : (value) {
                             setDialogState(() => selectedPost = value);
                           },
                         ),
@@ -620,10 +631,13 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                           decoration: _buildInputDecoration('Département', Icons.business_outlined),
                           items: ['Technique', 'Management', 'Production', 'Qualité', 'Administration']
                               .map((dept) => DropdownMenuItem(
-                              value: dept,
-                              child: Text(dept, style: const TextStyle(fontSize: 12))))
+                            value: dept,
+                            child: Text(dept, style: const TextStyle(fontSize: 12)),
+                          ))
                               .toList(),
-                          onChanged: viewModel.isLoading ? null : (value) {
+                          onChanged: viewModel.isLoading
+                              ? null
+                              : (value) {
                             setDialogState(() => selectedDepartement = value);
                           },
                         ),
@@ -639,13 +653,16 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                                   padding: const EdgeInsets.symmetric(vertical: 8),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
-                                child: const Text("Annuler", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                child: const Text("Annuler",
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                               ),
                             ),
                             const SizedBox(width: 6),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: viewModel.isLoading ? null : () async {
+                                onPressed: viewModel.isLoading
+                                    ? null
+                                    : () async {
                                   if (nameController.text.isNotEmpty &&
                                       emailController.text.isNotEmpty &&
                                       passwordController.text.isNotEmpty &&
@@ -654,7 +671,6 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                                       selectedRole != null &&
                                       selectedPost != null &&
                                       selectedDepartement != null) {
-
                                     viewModel.clearError();
 
                                     final success = await viewModel.createUser(
@@ -676,9 +692,7 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                                         ),
                                       );
                                     }
-                                    // L'erreur sera affichée automatiquement via le Consumer
                                   } else {
-                                    // Validation locale
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
                                         content: Text("Veuillez remplir tous les champs correctement"),
@@ -702,7 +716,8 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                                     strokeWidth: 2,
                                   ),
                                 )
-                                    : const Text("Ajouter", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                    : const Text("Ajouter",
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                               ),
                             ),
                           ],
@@ -719,7 +734,6 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
     );
   }
 
-  // DIALOG POUR MODIFIER UN UTILISATEUR AVEC MVVM
   void _showEditEmployeeDialog(UserModel employee, UserViewModel viewModel) {
     final nameController = TextEditingController(text: employee.nom);
     final emailController = TextEditingController(text: employee.email);
@@ -832,10 +846,13 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                           decoration: _buildInputDecoration('Rôle', Icons.person_pin),
                           items: ['Admin', 'Employee']
                               .map((role) => DropdownMenuItem(
-                              value: role,
-                              child: Text(role, style: const TextStyle(fontSize: 12))))
+                            value: role,
+                            child: Text(role, style: const TextStyle(fontSize: 12)),
+                          ))
                               .toList(),
-                          onChanged: vm.isLoading ? null : (value) {
+                          onChanged: vm.isLoading
+                              ? null
+                              : (value) {
                             setDialogState(() => selectedRole = value);
                           },
                         ),
@@ -845,10 +862,13 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                           decoration: _buildInputDecoration('Poste', Icons.work_outline),
                           items: ['Technicien', 'Manager', 'Opérateur', 'Superviseur', 'Administrateur']
                               .map((post) => DropdownMenuItem(
-                              value: post,
-                              child: Text(post, style: const TextStyle(fontSize: 12))))
+                            value: post,
+                            child: Text(post, style: const TextStyle(fontSize: 12)),
+                          ))
                               .toList(),
-                          onChanged: vm.isLoading ? null : (value) {
+                          onChanged: vm.isLoading
+                              ? null
+                              : (value) {
                             setDialogState(() => selectedPost = value);
                           },
                         ),
@@ -858,10 +878,13 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                           decoration: _buildInputDecoration('Département', Icons.business_outlined),
                           items: ['Technique', 'Management', 'Production', 'Qualité', 'Administration']
                               .map((dept) => DropdownMenuItem(
-                              value: dept,
-                              child: Text(dept, style: const TextStyle(fontSize: 12))))
+                            value: dept,
+                            child: Text(dept, style: const TextStyle(fontSize: 12)),
+                          ))
                               .toList(),
-                          onChanged: vm.isLoading ? null : (value) {
+                          onChanged: vm.isLoading
+                              ? null
+                              : (value) {
                             setDialogState(() => selectedDepartement = value);
                           },
                         ),
@@ -877,29 +900,33 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                                   padding: const EdgeInsets.symmetric(vertical: 8),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
-                                child: const Text("Annuler", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                child: const Text("Annuler",
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                               ),
                             ),
                             const SizedBox(width: 6),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: vm.isLoading ? null : () async {
+                                onPressed: vm.isLoading
+                                    ? null
+                                    : () async {
                                   if (nameController.text.isNotEmpty &&
                                       emailController.text.isNotEmpty &&
                                       selectedRole != null &&
                                       selectedPost != null &&
                                       selectedDepartement != null) {
-
                                     vm.clearError();
 
                                     final success = await vm.updateUser(
-                                      userId: employee.id!,
+                                      userId: employee.id,
                                       nom: nameController.text,
                                       email: emailController.text,
                                       role: selectedRole!,
                                       poste: selectedPost!,
                                       departement: selectedDepartement!,
-                                      motdepasse: passwordController.text.isNotEmpty ? passwordController.text : null,
+                                      motdepasse: passwordController.text.isNotEmpty
+                                          ? passwordController.text
+                                          : null,
                                     );
 
                                     if (success) {
@@ -912,7 +939,6 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                                       );
                                     }
                                   } else {
-                                    // Validation locale
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
                                         content: Text("Veuillez remplir tous les champs obligatoires"),
@@ -936,7 +962,8 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                                     strokeWidth: 2,
                                   ),
                                 )
-                                    : const Text("Modifier", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                    : const Text("Modifier",
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                               ),
                             ),
                           ],
@@ -953,7 +980,6 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
     );
   }
 
-  // DIALOG DE CONFIRMATION DE SUPPRESSION
   void _showDeleteConfirmationDialog(UserModel employee, UserViewModel viewModel) {
     showDialog(
       context: context,
@@ -986,7 +1012,9 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
           Consumer<UserViewModel>(
             builder: (context, vm, child) {
               return ElevatedButton(
-                onPressed: vm.isLoading ? null : () async {
+                onPressed: vm.isLoading
+                    ? null
+                    : () async {
                   final success = await vm.deleteUser(employee.id!);
                   if (success) {
                     Navigator.pop(context);
@@ -1020,7 +1048,6 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
     );
   }
 
-  // DIALOG DE DÉTAIL UTILISATEUR
   void _showUserDetailsDialog(UserModel employee, UserViewModel viewModel) {
     Color statusColor = _getStatusColor(employee.isActive ?? true ? 'Actif' : 'Inactif');
 
@@ -1086,12 +1113,17 @@ class _UsersScreenState extends State<UsersScreen> with TickerProviderStateMixin
                 const SizedBox(height: 20),
                 _buildInfoRow(Icons.info_outline, 'ID', employee.id ?? 'N/A'),
                 _buildInfoRow(Icons.badge, 'Rôle', employee.role),
-                _buildInfoRow(Icons.work, 'Poste', employee.poste),
-                _buildInfoRow(Icons.business, 'Département', employee.departement),
-                _buildInfoRow(Icons.calendar_today, 'Date d\'embauche', employee.joinDate ?? 'N/A'),
+                _buildInfoRow(Icons.work, 'Poste', employee.poste ?? 'N/A'), // Fix: Handle null poste
+                _buildInfoRow(Icons.business, 'Département', employee.departement ?? 'N/A'), // Fix: Handle null departement
+                _buildInfoRow(
+                  Icons.calendar_today,
+                  'Date de création',
+                  employee.createdAt != null ? _formatDate(employee.createdAt!) : 'N/A',
+                ),
                 _buildInfoRow(Icons.email, 'Email', employee.email),
                 _buildInfoRow(Icons.lock, 'Mot de passe', '••••••••'),
-                _buildInfoRow(Icons.info, 'Statut', employee.isActive ?? true ? 'Actif' : 'Inactif', color: statusColor),
+                _buildInfoRow(Icons.info, 'Statut', employee.isActive ?? true ? 'Actif' : 'Inactif',
+                    color: statusColor),
                 const SizedBox(height: 20),
                 Row(
                   children: [

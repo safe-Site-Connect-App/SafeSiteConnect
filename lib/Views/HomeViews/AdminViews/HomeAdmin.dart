@@ -1,4 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../../ViewsModels/alerte_viewmodel.dart';
+import '../../../ViewsModels/pointage_viewmodel.dart';
+import '../../../ViewsModels/tache_viewmodel.dart';
+import '../../../ViewsModels/user_viewmodel.dart';
+import '../../../models/alerte_model.dart';
 import 'CustomBottomNavigationBarAdmin.dart';
 import 'admin_profile_screen.dart';
 
@@ -10,49 +17,16 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStateMixin {
-  // State variables
   int _currentIndex = 0;
   final String _adminName = "Admin Principal";
-  bool _hasCriticalAlerts = true;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-
-  // Mock data for statistics
-  final Map<String, dynamic> _statistics = {
-    'incidents': {'total': 12, 'urgent': 3, 'resolved': 9},
-    'pointages': {'today': 247, 'absent': 8, 'late': 5},
-    'tasks': {'total': 156, 'completed': 89, 'pending': 67, 'overdue': 12},
-    'employees': {'active': 255, 'onSite': 247, 'offSite': 8},
-  };
-
-  final List<Map<String, dynamic>> _criticalNotifications = [
-    {
-      'title': 'Incident sécurité Zone A',
-      'description': 'Fuite de gaz détectée - Évacuation en cours',
-      'time': '09:15',
-      'severity': 'critical',
-      'icon': Icons.dangerous,
-    },
-    {
-      'title': 'Retards multiples Équipe B',
-      'description': '8 employés en retard ce matin',
-      'time': '08:45',
-      'severity': 'warning',
-      'icon': Icons.schedule,
-    },
-    {
-      'title': 'Maintenance urgente',
-      'description': 'Machine critique en panne Zone C',
-      'time': '08:30',
-      'severity': 'urgent',
-      'icon': Icons.build_circle,
-    },
-  ];
 
   @override
   void initState() {
     super.initState();
     _initializeAnimation();
+    _fetchData();
   }
 
   void _initializeAnimation() {
@@ -65,6 +39,15 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     );
   }
 
+  void _fetchData() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AlerteViewModel>().initialize();
+      context.read<PointageViewModel>().fetchTodayPointage();
+      context.read<TacheViewModel>().loadAllTaches();
+      context.read<UserViewModel>().loadUsers();
+    });
+  }
+
   @override
   void dispose() {
     _pulseController.dispose();
@@ -73,10 +56,11 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      appBar: _buildAppBar(),
-      body: _buildBody(),
+      appBar: _buildAppBar(screenWidth),
+      body: _buildBody(screenWidth),
       bottomNavigationBar: CustomBottomNavigationBarAdmin(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
@@ -84,7 +68,7 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     );
   }
 
-  AppBar _buildAppBar() {
+  AppBar _buildAppBar(double screenWidth) {
     return AppBar(
       backgroundColor: const Color(0xFF005B96),
       elevation: 0,
@@ -95,15 +79,15 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
             "Tableau de bord",
             style: TextStyle(
               color: Colors.white.withOpacity(0.8),
-              fontSize: 14,
+              fontSize: screenWidth * 0.035,
               fontWeight: FontWeight.w400,
             ),
           ),
           Text(
             _adminName,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: screenWidth * 0.045,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -118,21 +102,21 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
             );
           },
           child: Container(
-            margin: const EdgeInsets.only(right: 16),
+            margin: EdgeInsets.only(right: screenWidth * 0.04),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+              border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 8,
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: CircleAvatar(
-              radius: 18,
-              backgroundImage: AssetImage('assets/amd.jpg'),
+              radius: screenWidth * 0.04,
+              backgroundImage: const AssetImage('assets/amd.jpg'),
             ),
           ),
         ),
@@ -140,34 +124,80 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     );
   }
 
-  Widget _buildBody() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildHeaderGradient(),
-          Padding(
-            padding: const EdgeInsets.all(20.0),
+  Widget _buildBody(double screenWidth) {
+    return Consumer4<AlerteViewModel, PointageViewModel, TacheViewModel, UserViewModel>(
+      builder: (context, alerteVM, pointageVM, tacheVM, userVM, child) {
+        if (alerteVM.isLoading || pointageVM.isLoading || tacheVM.isLoading || userVM.isLoading) {
+          return Center(
+            child: CircularProgressIndicator(
+              color: const Color(0xFF005B96),
+              strokeWidth: 3,
+            ),
+          );
+        }
+
+        if (alerteVM.hasError || pointageVM.errorMessage != null || tacheVM.errorMessage != null || userVM.errorMessage != null) {
+          return Center(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildStatisticsSection(),
-                const SizedBox(height: 32),
-                if (_hasCriticalAlerts) _buildCriticalAlertsSection(),
-                const SizedBox(height: 32),
-                _buildQuickActionsSection(),
-                const SizedBox(height: 32),
-                _buildRecentActivitiesSection(),
+                Icon(Icons.error_outline, size: screenWidth * 0.12, color: Colors.red[300]),
+                SizedBox(height: screenWidth * 0.03),
+                Text(
+                  alerteVM.error ?? pointageVM.errorMessage ?? tacheVM.errorMessage ?? userVM.errorMessage ?? 'Une erreur est survenue',
+                  style: TextStyle(color: Colors.red[700], fontSize: screenWidth * 0.035),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: screenWidth * 0.03),
+                ElevatedButton(
+                  onPressed: _fetchData,
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.04, vertical: screenWidth * 0.02),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  child: Text('Réessayer', style: TextStyle(fontSize: screenWidth * 0.03)),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            await Future.wait([
+              alerteVM.refresh(),
+              pointageVM.fetchTodayPointage(),
+              tacheVM.loadAllTaches(),
+              userVM.loadUsers(),
+            ]);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                _buildHeaderGradient(screenWidth),
+                Padding(
+                  padding: EdgeInsets.all(screenWidth * 0.04),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildStatisticsSection(alerteVM, pointageVM, tacheVM, userVM, screenWidth),
+                      SizedBox(height: screenWidth * 0.06),
+                      _buildCriticalAlertsSection(alerteVM, screenWidth),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildHeaderGradient() {
+  Widget _buildHeaderGradient(double screenWidth) {
     return Container(
-      height: 60,
+      height: screenWidth * 0.12,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -178,47 +208,61 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     );
   }
 
-  Widget _buildStatisticsSection() {
+  Widget _buildStatisticsSection(
+      AlerteViewModel alerteVM,
+      PointageViewModel pointageVM,
+      TacheViewModel tacheVM,
+      UserViewModel userVM,
+      double screenWidth,
+      ) {
+    // Calculate the number of users who have clocked in today
+    final usersPointedToday = pointageVM.weekPointages.length;
+    final totalUsers = userVM.users.length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCardHeader(Icons.analytics_outlined, "Statistiques globales"),
-        const SizedBox(height: 16),
+        _buildCardHeader(Icons.analytics_outlined, "Statistiques globales", screenWidth: screenWidth),
+        SizedBox(height: screenWidth * 0.03),
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 0.85,
+          crossAxisSpacing: screenWidth * 0.04,
+          mainAxisSpacing: screenWidth * 0.04,
+          childAspectRatio: 0.9,
           children: [
             _buildStatCard(
               "Incidents",
-              "${_statistics['incidents']['total']}",
-              "${_statistics['incidents']['urgent']} urgents",
+              "${alerteVM.totalCount}",
+              "${alerteVM.criticalCount} critiques",
               Icons.report_problem,
               Colors.red,
+              screenWidth,
             ),
             _buildStatCard(
               "Pointages",
-              "${_statistics['pointages']['today']}",
-              "${_statistics['pointages']['absent']} absents",
+              "$usersPointedToday / $totalUsers",
+              "Employés présents",
               Icons.access_time,
               Colors.blue,
+              screenWidth,
             ),
             _buildStatCard(
               "Tâches",
-              "${_statistics['tasks']['completed']}/${_statistics['tasks']['total']}",
-              "${_statistics['tasks']['overdue']} en retard",
+              "${tacheVM.totalTaches}",
+              "${tacheVM.tachesP1} P1",
               Icons.assignment,
               Colors.green,
+              screenWidth,
             ),
             _buildStatCard(
               "Employés",
-              "${_statistics['employees']['onSite']}",
-              "sur site maintenant",
+              "$totalUsers",
+              "actifs",
               Icons.people,
               Colors.purple,
+              screenWidth,
             ),
           ],
         ),
@@ -226,7 +270,9 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     );
   }
 
-  Widget _buildCriticalAlertsSection() {
+  Widget _buildCriticalAlertsSection(AlerteViewModel alerteVM, double screenWidth) {
+    final criticalAlerts = alerteVM.alertes.where((alert) => alert.isCritical).toList();
+
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
@@ -235,60 +281,88 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
           child: Container(
             decoration: _alertDecoration(),
             child: Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: EdgeInsets.all(screenWidth * 0.04),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildCardHeader(Icons.warning, "Alertes critiques", color: Colors.red),
-                  const SizedBox(height: 16),
-                  ListView.separated(
+                  _buildCardHeader(
+                    Icons.warning,
+                    "Alertes critiques (${criticalAlerts.length})",
+                    color: Colors.red,
+                    screenWidth: screenWidth,
+                  ),
+                  SizedBox(height: screenWidth * 0.03),
+                  criticalAlerts.isEmpty
+                      ? Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(screenWidth * 0.06),
+                      child: Column(
+                        children: [
+                          Icon(Icons.check_circle, size: screenWidth * 0.12, color: Colors.grey[400]),
+                          SizedBox(height: screenWidth * 0.03),
+                          Text(
+                            'Aucune alerte critique',
+                            style: TextStyle(color: Colors.grey[600], fontSize: screenWidth * 0.035),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                      : ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _criticalNotifications.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 12),
+                    itemCount: criticalAlerts.length > 5 ? 5 : criticalAlerts.length,
+                    separatorBuilder: (context, index) => SizedBox(height: screenWidth * 0.03),
                     itemBuilder: (context, index) {
-                      final notification = _criticalNotifications[index];
-                      return _buildNotificationItem(notification);
+                      return _buildNotificationItem(criticalAlerts[index], screenWidth);
                     },
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: screenWidth * 0.04),
                   Row(
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () {},
+                          onPressed: () {
+                            // Navigate to IncidentScreen
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: EdgeInsets.symmetric(vertical: screenWidth * 0.03),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             elevation: 2,
                           ),
-                          icon: const Icon(Icons.visibility),
-                          label: const Text(
+                          icon: Icon(Icons.visibility, size: screenWidth * 0.04),
+                          label: Text(
                             "Voir toutes",
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: screenWidth * 0.03),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => setState(() => _hasCriticalAlerts = false),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7ED957),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 2,
-                          ),
-                          icon: const Icon(Icons.check_circle),
-                          label: const Text(
-                            "Marquer vues",
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                      if (criticalAlerts.isNotEmpty) ...[
+                        SizedBox(width: screenWidth * 0.03),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              for (var alert in criticalAlerts) {
+                                await alerteVM.markAsResolved(alert.id!);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF7ED957),
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: screenWidth * 0.03),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              elevation: 2,
+                            ),
+                            icon: Icon(Icons.check_circle, size: screenWidth * 0.04),
+                            label: Text(
+                              "Marquer vues",
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: screenWidth * 0.03),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ],
@@ -300,121 +374,50 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     );
   }
 
-  Widget _buildQuickActionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildCardHeader(Icons.flash_on, "Actions rapides"),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 160,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            children: [
-              _buildActionCard("Nouvel incident", Icons.add_alert, const Color(0xFFFF5722)),
-              _buildActionCard("Rapport quotidien", Icons.description, const Color(0xFF2196F3)),
-              _buildActionCard("Gestion équipes", Icons.groups, const Color(0xFF9C27B0)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentActivitiesSection() {
+  Widget _buildStatCard(String title, String value, String subtitle, IconData icon, Color color, double screenWidth) {
     return Container(
-      decoration: _cardDecoration(),
+      decoration: _cardDecoration(screenWidth),
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildCardHeader(Icons.history, "Activités récentes"),
-            const SizedBox(height: 20),
-            _buildActivityItem(
-              "Hassan Fayech a pointé",
-              "Zone A - Il y a 5 min",
-              Icons.check_circle,
-              const Color(0xFF7ED957),
-            ),
-            _buildActivityItem(
-              "Incident résolu",
-              "Zone B - Il y a 15 min",
-              Icons.task_alt,
-              Colors.blue,
-            ),
-            _buildActivityItem(
-              "Nouveau rapport",
-              "Équipe maintenance - Il y a 1h",
-              Icons.description,
-              Colors.orange,
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () {},
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF005B96),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                child: const Text(
-                  "Voir toutes les activités",
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String title, String value, String subtitle, IconData icon, Color color) {
-    return Container(
-      decoration: _cardDecoration(),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: EdgeInsets.all(screenWidth * 0.04),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(screenWidth * 0.02),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(icon, color: color, size: 24),
+                  child: Icon(icon, color: color, size: screenWidth * 0.05),
                 ),
                 const Spacer(),
               ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: screenWidth * 0.03),
             Text(
               value,
-              style: const TextStyle(
-                fontSize: 24,
+              style: TextStyle(
+                fontSize: screenWidth * 0.05,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF005B96),
+                color: const Color(0xFF005B96),
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: screenWidth * 0.01),
             Text(
               title,
-              style: const TextStyle(
-                fontSize: 14,
+              style: TextStyle(
+                fontSize: screenWidth * 0.035,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF005B96),
+                color: const Color(0xFF005B96),
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: screenWidth * 0.01),
             Text(
               subtitle,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: screenWidth * 0.03,
                 color: Colors.grey[600],
                 fontWeight: FontWeight.w500,
               ),
@@ -425,58 +428,54 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     );
   }
 
-  Widget _buildNotificationItem(Map<String, dynamic> notification) {
-    Color severityColor = notification['severity'] == 'critical'
-        ? Colors.red
-        : notification['severity'] == 'urgent'
-        ? Colors.orange
-        : Colors.amber;
-
+  Widget _buildNotificationItem(AlerteModel alert, double screenWidth) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(screenWidth * 0.03),
       decoration: BoxDecoration(
-        color: severityColor.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: severityColor.withOpacity(0.2)),
+        color: Colors.red.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red.withOpacity(0.2)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(screenWidth * 0.02),
             decoration: BoxDecoration(
-              color: severityColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(notification['icon'], color: severityColor, size: 20),
+            child: Icon(Icons.warning, color: Colors.red, size: screenWidth * 0.04),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: screenWidth * 0.03),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  notification['title'],
+                  alert.titre,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: screenWidth * 0.035,
                     fontWeight: FontWeight.bold,
-                    color: severityColor,
+                    color: Colors.red,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: screenWidth * 0.01),
                 Text(
-                  notification['description'],
+                  alert.description,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: screenWidth * 0.03,
                     color: Colors.grey[700],
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
           Text(
-            notification['time'],
+            alert.getFormattedDate().split(' ')[1],
             style: TextStyle(
-              fontSize: 12,
+              fontSize: screenWidth * 0.03,
               color: Colors.grey[600],
               fontWeight: FontWeight.w500,
             ),
@@ -486,101 +485,19 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, Color color) {
-    return Container(
-      width: 120,
-      margin: const EdgeInsets.only(right: 16),
-      decoration: _cardDecoration(),
-      child: InkWell(
-        onTap: () {},
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(icon, color: color, size: 32),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF005B96),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActivityItem(String title, String subtitle, IconData icon, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF005B96),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  BoxDecoration _cardDecoration() {
+  BoxDecoration _cardDecoration(double screenWidth) {
     return BoxDecoration(
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [Colors.white, Color(0xFFF8F9FA)],
       ),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(12),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.08),
-          blurRadius: 20,
-          offset: const Offset(0, 4),
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
         ),
       ],
     );
@@ -593,34 +510,34 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
         end: Alignment.bottomRight,
         colors: [Colors.red.shade50, Colors.red.shade100.withOpacity(0.3)],
       ),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Colors.red.withOpacity(0.3), width: 2),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.red.withOpacity(0.3), width: 1.5),
       boxShadow: [
         BoxShadow(
           color: Colors.red.withOpacity(0.1),
-          blurRadius: 20,
-          offset: const Offset(0, 4),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
         ),
       ],
     );
   }
 
-  Widget _buildCardHeader(IconData icon, String title, {Color color = const Color(0xFF005B96)}) {
+  Widget _buildCardHeader(IconData icon, String title, {Color color = const Color(0xFF005B96), required double screenWidth}) {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          padding: EdgeInsets.all(screenWidth * 0.02),
           decoration: BoxDecoration(
             color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: color, size: 24),
+          child: Icon(icon, color: color, size: screenWidth * 0.05),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: screenWidth * 0.03),
         Text(
           title,
           style: TextStyle(
-            fontSize: 20,
+            fontSize: screenWidth * 0.04,
             fontWeight: FontWeight.bold,
             color: color,
           ),

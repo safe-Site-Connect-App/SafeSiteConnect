@@ -4,7 +4,10 @@ import 'package:safesiteconnect/navigation/route.dart';
 
 // Providers
 import 'Provider/Providertheme.dart';
+import 'ViewsModels/alerte_viewmodel.dart';
 import 'ViewsModels/auth_viewmodel.dart';
+import 'ViewsModels/pointage_viewmodel.dart';
+import 'ViewsModels/tache_viewmodel.dart';
 import 'ViewsModels/user_viewmodel.dart';
 
 void main() {
@@ -14,6 +17,9 @@ void main() {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => UserViewModel()),
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
+        ChangeNotifierProvider(create: (_) => PointageViewModel()),
+        ChangeNotifierProvider(create: (_) => AlerteViewModel()),
+        ChangeNotifierProvider(create: (_) => TacheViewModel()),
 
       ],
       child: const MyApp(),

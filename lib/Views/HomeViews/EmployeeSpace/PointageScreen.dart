@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+import '../../../ViewsModels/pointage_viewmodel.dart';
 import '../../../navigation/CustomBottomNavigationBar.dart';
 import 'QRScannerScreen.dart';
+import 'package:intl/intl.dart';
 
 class PointageScreen extends StatefulWidget {
   const PointageScreen({super.key});
@@ -11,18 +14,61 @@ class PointageScreen extends StatefulWidget {
 }
 
 class _PointageScreenState extends State<PointageScreen> {
-  // State variables
   int _currentIndex = 1;
-  final String _currentStatus = "Présent";
-  final String _lastCheckInTime = "07:53";
-  final String _currentZone = "Zone A";
-  final List<Map<String, String>> _checkInHistory = [
-    {'date': '22/07/2025', 'time': '07:53', 'zone': 'Zone A', 'type': 'Entrée site'},
-    {'date': '21/07/2025', 'time': '16:30', 'zone': 'Zone B', 'type': 'Sortie zone'},
-    {'date': '21/07/2025', 'time': '08:15', 'zone': 'Zone B', 'type': 'Entrée site'},
-    {'date': '20/07/2025', 'time': '17:00', 'zone': 'Point de rassemblement', 'type': 'Point de rassemblement'},
-    {'date': '20/07/2025', 'time': '07:45', 'zone': 'Zone A', 'type': 'Entrée site'},
-  ];
+  List<Map<String, dynamic>> _historyData = [];
+  bool _isLoadingHistory = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
+  }
+
+  Future<void> _loadData() async {
+    final pointageVM = Provider.of<PointageViewModel>(context, listen: false);
+
+    // Charger le statut du jour
+    await pointageVM.fetchTodayPointage();
+
+    // Charger l'historique (30 derniers jours)
+    await _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    setState(() => _isLoadingHistory = true);
+
+    try {
+      final pointageVM = Provider.of<PointageViewModel>(context, listen: false);
+
+      // Calculer la période (30 derniers jours)
+      final endDate = DateTime.now();
+      final startDate = endDate.subtract(const Duration(days: 30));
+
+      final history = await pointageVM.repository.getPointageHistory(
+        startDate: DateFormat('yyyy-MM-dd').format(startDate),
+        endDate: DateFormat('yyyy-MM-dd').format(endDate),
+      );
+
+      setState(() {
+        _historyData = history;
+        _isLoadingHistory = false;
+      });
+    } catch (e) {
+      print('❌ Erreur chargement historique: $e');
+      setState(() => _isLoadingHistory = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur de chargement: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _scanQRCode() async {
     final PermissionStatus permission = await Permission.camera.request();
@@ -30,9 +76,19 @@ class _PointageScreenState extends State<PointageScreen> {
     switch (permission) {
       case PermissionStatus.granted:
         if (mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+          final result = await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ChangeNotifierProvider.value(
+                value: Provider.of<PointageViewModel>(context, listen: false),
+                child: const QRScannerScreen(),
+              ),
+            ),
           );
+
+          // Rafraîchir les données après le scan
+          if (result == true && mounted) {
+            await _loadData();
+          }
         }
         break;
       case PermissionStatus.denied:
@@ -50,7 +106,7 @@ class _PointageScreenState extends State<PointageScreen> {
     _showDialog(
       title: 'Autorisation caméra',
       icon: Icons.camera_alt,
-      content: 'L\'accès à la caméra est nécessaire pour scanner les codes QR. Veuillez autoriser l\'accès dans les paramètres.',
+      content: 'L\'accès à la caméra est nécessaire pour scanner les codes QR.',
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
@@ -72,7 +128,7 @@ class _PointageScreenState extends State<PointageScreen> {
     _showDialog(
       title: 'Paramètres requis',
       icon: Icons.settings,
-      content: 'L\'autorisation caméra a été refusée de façon permanente. Veuillez l\'activer manuellement dans les paramètres de l\'application.',
+      content: 'Veuillez activer l\'autorisation caméra dans les paramètres.',
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
@@ -120,7 +176,10 @@ class _PointageScreenState extends State<PointageScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: _buildAppBar(),
-      body: _buildBody(),
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        child: _buildBody(),
+      ),
       floatingActionButton: _buildFloatingActionButton(),
       bottomNavigationBar: CustomBottomNavigationBar(
         currentIndex: _currentIndex,
@@ -144,8 +203,8 @@ class _PointageScreenState extends State<PointageScreen> {
       automaticallyImplyLeading: false,
       actions: [
         IconButton(
-          icon: const Icon(Icons.calendar_today, color: Colors.white, size: 24),
-          onPressed: () {},
+          icon: const Icon(Icons.refresh, color: Colors.white, size: 24),
+          onPressed: _loadData,
         ),
         const SizedBox(width: 8),
       ],
@@ -154,6 +213,7 @@ class _PointageScreenState extends State<PointageScreen> {
 
   Widget _buildBody() {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
         children: [
           _buildHeaderGradient(),
@@ -187,40 +247,85 @@ class _PointageScreenState extends State<PointageScreen> {
   }
 
   Widget _buildStatusCard() {
-    return Container(
-      decoration: _cardDecoration(),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildCardHeader(Icons.badge_outlined, "Statut du jour"),
-            const SizedBox(height: 20),
-            Row(
+    return Consumer<PointageViewModel>(
+      builder: (context, pointageVM, _) {
+        if (pointageVM.isLoading) {
+          return Container(
+            decoration: _cardDecoration(),
+            padding: const EdgeInsets.all(40),
+            child: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final statusText = pointageVM.getStatusText();
+        final statusColor = pointageVM.getStatusColor();
+        final statusIcon = pointageVM.getStatusIcon();
+        final lastPointageText = pointageVM.getLastPointageText();
+
+        return Container(
+          decoration: _cardDecoration(),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.check_circle,
-                  color: _currentStatus == "Présent" ? const Color(0xFF7ED957) : Colors.red,
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  _currentStatus,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: _currentStatus == "Présent" ? const Color(0xFF7ED957) : Colors.red,
+                _buildCardHeader(Icons.badge_outlined, "Statut du jour"),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(statusIcon, color: statusColor, size: 24),
+                      const SizedBox(width: 12),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: statusColor,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                _buildInfoRow(
+                  Icons.access_time,
+                  "Dernier pointage",
+                  lastPointageText ?? "Aucun pointage aujourd'hui",
+                ),
+                const SizedBox(height: 8),
+                _buildInfoRow(
+                  Icons.calendar_today,
+                  "Date",
+                  DateFormat('dd/MM/yyyy').format(DateTime.now()),
+                ),
+                if (pointageVM.hasEntree) ...[
+                  const SizedBox(height: 8),
+                  _buildInfoRow(
+                    Icons.login,
+                    "Entrée",
+                    pointageVM.entreePointage?.heure ?? '-',
+                  ),
+                ],
+                if (pointageVM.hasSortie) ...[
+                  const SizedBox(height: 8),
+                  _buildInfoRow(
+                    Icons.logout,
+                    "Sortie",
+                    pointageVM.sortiePointage?.heure ?? '-',
+                  ),
+                ],
               ],
             ),
-            const SizedBox(height: 16),
-            _buildInfoRow(Icons.access_time, "Dernier pointage", _lastCheckInTime),
-            const SizedBox(height: 8),
-            _buildInfoRow(Icons.place, "Zone actuelle", _currentZone),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -228,42 +333,82 @@ class _PointageScreenState extends State<PointageScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCardHeader(Icons.history, "Historique des pointages"),
+        _buildCardHeader(Icons.history, "Historique des 30 derniers jours"),
         const SizedBox(height: 16),
-        Container(
-          decoration: _cardDecoration(),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _checkInHistory.length,
-            separatorBuilder: (context, index) => const Divider(height: 1, color: Colors.grey),
-            itemBuilder: (context, index) {
-              final entry = _checkInHistory[index];
-              return ListTile(
-                leading: Icon(
-                  entry['type'] == 'Entrée site'
-                      ? Icons.login
-                      : entry['type'] == 'Sortie zone'
-                      ? Icons.logout
-                      : Icons.place,
-                  color: const Color(0xFF005B96),
-                ),
-                title: Text(
-                  "${entry['date']} - ${entry['time']}",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF005B96),
+        if (_isLoadingHistory)
+          Container(
+            decoration: _cardDecoration(),
+            padding: const EdgeInsets.all(40),
+            child: const Center(child: CircularProgressIndicator()),
+          )
+        else if (_historyData.isEmpty)
+          Container(
+            decoration: _cardDecoration(),
+            padding: const EdgeInsets.all(40),
+            child: const Center(
+              child: Column(
+                children: [
+                  Icon(Icons.history, size: 48, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text(
+                    'Aucun historique disponible',
+                    style: TextStyle(color: Colors.grey, fontSize: 16),
                   ),
-                ),
-                subtitle: Text(
-                  "${entry['type']} ${entry['zone'] != '' ? '(${entry['zone']})' : ''}",
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-              );
-            },
+                ],
+              ),
+            ),
+          )
+        else
+          Container(
+            decoration: _cardDecoration(),
+            child: ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _historyData.length,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final entry = _historyData[index];
+                final type = entry['type'] as String;
+                final date = DateTime.parse(entry['date']);
+                final heure = entry['heure'] as String;
+                final etat = entry['etat'] as String?;
+
+                return ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: type == 'ENTREE'
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      type == 'ENTREE' ? Icons.login : Icons.logout,
+                      color: type == 'ENTREE' ? Colors.green : Colors.blue,
+                      size: 20,
+                    ),
+                  ),
+                  title: Text(
+                    "${DateFormat('dd/MM/yyyy').format(date)} - $heure",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF005B96),
+                    ),
+                  ),
+                  subtitle: Text(
+                    "${type == 'ENTREE' ? 'Entrée' : 'Sortie'}${etat != null ? ' - $etat' : ''}",
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  trailing: etat == 'Absent'
+                      ? const Icon(Icons.warning, color: Colors.orange, size: 20)
+                      : etat == 'Present'
+                      ? const Icon(Icons.check_circle, color: Colors.green, size: 20)
+                      : null,
+                );
+              },
+            ),
           ),
-        ),
       ],
     );
   }
@@ -328,12 +473,14 @@ class _PointageScreenState extends State<PointageScreen> {
           child: Icon(icon, color: const Color(0xFF005B96), size: 24),
         ),
         const SizedBox(width: 12),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF005B96),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF005B96),
+            ),
           ),
         ),
       ],
@@ -353,12 +500,14 @@ class _PointageScreenState extends State<PointageScreen> {
             fontWeight: FontWeight.w500,
           ),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Color(0xFF005B96),
-            fontWeight: FontWeight.w600,
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF005B96),
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

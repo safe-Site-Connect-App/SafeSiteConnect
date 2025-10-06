@@ -12,6 +12,8 @@ class AuthViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   UserModel? get user => _user;
+  UserModel? get currentUser => _user; // ✅ Ajout de cet alias
+  bool get isAuthenticated => _user != null;
 
   Future<void> login(String email, String password) async {
     _isLoading = true;
@@ -19,7 +21,7 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _user = await _authRepo.login(email, password);
+      _user = (await _authRepo.login(email, password)) as UserModel?;
     } catch (e) {
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
     } finally {
