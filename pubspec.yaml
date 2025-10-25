@@ -1,0 +1,62 @@
+name: safesiteconnect
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  fl_chart: ^0.68.0
+  flutter_native_splash: ^2.4.6
+  mobile_scanner: ^7.0.1
+  permission_handler: ^11.0.1
+  intl: ^0.18.0
+  pdf: ^3.10.0
+  path_provider: ^2.1.0
+  open_file: ^3.3.0
+  printing: ^5.11.2
+  image_picker: ^1.0.4
+  provider: ^6.1.1
+  dio: ^5.4.0+1
+  shared_preferences: ^2.0.0
+  flutter_secure_storage: ^9.0.0
+  jwt_decoder: ^2.0.1
+
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.13.1  # ✅ Ajouté ici
+
+
+
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon.png
+    - assets/splash.png
+    - assets/1024.png
+    - assets/hassan.jpg
+    - assets/amd.jpg
+
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/1024.png"
+
+flutter_native_splash:
+  android: true
+  ios: true
+
+  color: "#FFFFFF"
+  image: assets/1024.png
